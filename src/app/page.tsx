@@ -11,6 +11,7 @@ import {
   formatCurrency,
   formatPercent,
 } from "@/lib/finance";
+import { buildAdvisorInsight } from "@/lib/advisor";
 
 const storageKey = "private-finance-agent:v1";
 
@@ -101,6 +102,7 @@ export default function Home() {
   const retirement = useMemo(() => calculateRetirement(input), [input]);
   const scenarios = useMemo(() => calculateScenarios(input), [input]);
   const radarMetrics = useMemo(() => buildRadarMetrics(summary), [summary]);
+  const advisorInsight = useMemo(() => buildAdvisorInsight(input, summary, retirement), [input, summary, retirement]);
 
   const totalAssetForChart = Math.max(summary.totalAssets, 1);
   const assetMix = [
@@ -284,23 +286,58 @@ export default function Home() {
           </div>
         </Section>
 
-        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <Section title="Agent 規劃摘要" description="這不是最後的建議，而是引導使用者做下一步決策。">
+        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <Section title="顧問式摘要" description="把公開研究裡財務顧問的 discovery 與 prioritization 能力，轉成產品化敘事。">
             <ul className="space-y-3 text-sm leading-6 text-slate-200">
-              <li>• 若保守情境下缺口明顯為負，優先檢查退休後支出是否能下修 10%~15%。</li>
-              <li>• 若你不想大幅降低生活品質，延後退休 2~5 年通常比追求高報酬更可控。</li>
-              <li>• 若流動性高但投資比例過低，可再評估退休前資產配置優化，但應避免過度追高風險。</li>
-              <li>• 65 歲前空窗期是核心風險點；請先確認勞保 / 勞退預估月領，再回填模型。</li>
+              {advisorInsight.narrative.map((item) => (
+                <li key={item}>• {item}</li>
+              ))}
             </ul>
           </Section>
 
-          <Section title="上架前還需要補的功能" description="這一版已接近 demo 可展示狀態，但離販售版仍有幾個缺口。">
+          <Section title="缺口優先順序" description="先補基礎安全，再補中期壓力，最後做優化。">
+            <div className="space-y-4">
+              {advisorInsight.gaps.map((gap) => (
+                <div key={gap.title} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-base font-semibold text-white">{gap.title}</div>
+                    <span className={`rounded-full px-3 py-1 text-xs ${gap.priority === "critical" ? "bg-rose-400/20 text-rose-200" : gap.priority === "important" ? "bg-amber-400/20 text-amber-200" : "bg-cyan-400/20 text-cyan-200"}`}>
+                      {gap.priority === "critical" ? "先補" : gap.priority === "important" ? "接著補" : "之後優化"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-300">{gap.reason}</p>
+                  <p className="mt-2 text-sm text-cyan-200">建議行動：{gap.action}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+          <Section title="你可能忽略的支出 / 收入 / 保障" description="這一塊就是讓產品開始像財務顧問，而不是只會等你輸入資料。">
+            <div className="grid gap-4 md:grid-cols-2">
+              {advisorInsight.blindSpots.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-base font-semibold text-white">{item.title}</div>
+                    <span className={`rounded-full px-3 py-1 text-xs ${item.category === "expense" ? "bg-rose-400/20 text-rose-200" : item.category === "income" ? "bg-emerald-400/20 text-emerald-200" : "bg-indigo-400/20 text-indigo-200"}`}>
+                      {item.category === "expense" ? "支出" : item.category === "income" ? "收入" : "保障"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-200">{item.prompt}</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-400">{item.rationale}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section title="上架前還需要補的功能" description="V3.5 開始有顧問感，但正式販售版還需要更完整的產品保護層。">
             <ol className="space-y-3 text-sm leading-6 text-slate-200">
-              <li>1. client-side encryption：讓瀏覽器端資料即使被讀到也難以理解。</li>
-              <li>2. PDF 報告輸出：讓使用者拿到真正可保存的財務規劃摘要。</li>
-              <li>3. 對話式訪談流程：把現在的靜態欄位改成一步一步引導，降低輸入壓力。</li>
-              <li>4. 法務頁：隱私政策、服務條款、免責聲明。</li>
-              <li>5. GitHub / Vercel 上線：做公開 demo 或 private preview。</li>
+              <li>1. 事件資料模型：把教育、換屋、買車、婚嫁、保險與賣房正式變成 timeline data。</li>
+              <li>2. client-side encryption：讓本地資料更接近高隱私正式版。</li>
+              <li>3. 視覺化圖表：流動資產軌跡、年度現金流分項、事件時間軸。</li>
+              <li>4. 對話式訪談流程：一步一步像顧問 discovery，而不是一次填完表格。</li>
+              <li>5. 法務頁與部署：隱私政策、免責聲明、GitHub / Vercel 上線。</li>
             </ol>
           </Section>
         </div>
