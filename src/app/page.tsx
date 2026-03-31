@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { buildAdvisorInsight } from "@/lib/advisor";
 import {
   buildRadarMetrics,
   calculateRetirement,
@@ -11,7 +12,7 @@ import {
   formatCurrency,
   formatPercent,
 } from "@/lib/finance";
-import { buildAdvisorInsight } from "@/lib/advisor";
+import { defaultEvents, PlanningEvent, projectTimeline } from "@/lib/timeline";
 
 const storageKey = "private-finance-agent:v1";
 
@@ -91,8 +92,34 @@ function ProgressBar({ value, colorClass }: { value: number; colorClass: string 
   );
 }
 
+function MiniBarChart({
+  values,
+  colorClass,
+  formatter,
+}: {
+  values: number[];
+  colorClass: string;
+  formatter: (value: number) => string;
+}) {
+  const max = Math.max(...values.map((value) => Math.abs(value)), 1);
+  return (
+    <div className="flex h-44 items-end gap-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+      {values.map((value, index) => {
+        const height = `${Math.max(8, (Math.abs(value) / max) * 100)}%`;
+        return (
+          <div key={`${index}-${value}`} className="group flex flex-1 flex-col items-center justify-end gap-2">
+            <div className="text-[10px] text-slate-500 opacity-0 transition group-hover:opacity-100">{formatter(value)}</div>
+            <div className={`w-full rounded-t-lg ${colorClass}`} style={{ height }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Home() {
   const [input, setInput] = useState<FinancialInput>(loadInitialInput);
+  const [events] = useState<PlanningEvent[]>(() => defaultEvents(new Date().getFullYear()));
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify(input));
@@ -103,6 +130,7 @@ export default function Home() {
   const scenarios = useMemo(() => calculateScenarios(input), [input]);
   const radarMetrics = useMemo(() => buildRadarMetrics(summary), [summary]);
   const advisorInsight = useMemo(() => buildAdvisorInsight(input, summary, retirement), [input, summary, retirement]);
+  const timeline = useMemo(() => projectTimeline(input, events, new Date().getFullYear(), 15), [input, events]);
 
   const totalAssetForChart = Math.max(summary.totalAssets, 1);
   const assetMix = [
@@ -133,28 +161,23 @@ export default function Home() {
         <header className="grid gap-6 rounded-[2rem] border border-cyan-400/20 bg-slate-950/50 p-8 shadow-2xl shadow-cyan-950/20 lg:grid-cols-[1.2fr_0.8fr]">
           <div>
             <div className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-1 text-xs tracking-[0.2em] text-cyan-200">
-              PRIVATE FINANCE AGENT V2
+              PRIVATE FINANCE AGENT V4
             </div>
             <h1 className="mt-4 text-4xl font-bold tracking-tight text-white md:text-5xl">
-              高隱私財務規劃助手
+              事件時間軸 + 顧問圖表版
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-7 text-slate-300 md:text-lg">
-              第二版加入三情境比較、視覺化財務指標與產品化摘要。目標不是讓使用者把家底交出來，而是讓他在匿名、低心理壓力的前提下，先看懂自己的財務健康與退休可能性。
+              V4 開始把人生事件真正放進模型：不只看退休數字，而是看教育、買車、裝潢、賣房、婚嫁與保險補強如何改變你的流動資產軌跡與年度現金流。
             </p>
-            <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-300">
-              <span className="rounded-full border border-white/10 px-3 py-1">local-first</span>
-              <span className="rounded-full border border-white/10 px-3 py-1">三情境試算</span>
-              <span className="rounded-full border border-white/10 px-3 py-1">匿名體驗</span>
-              <span className="rounded-full border border-white/10 px-3 py-1">退休橋接分析</span>
-            </div>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="text-sm text-slate-300">隱私與合規提醒</div>
+            <div className="text-sm text-slate-300">這一版的突破</div>
             <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-200">
-              <li>• 預設只保存在本機瀏覽器，這版沒有後端帳號系統</li>
-              <li>• 不要求真名、電話、身分證、詳細帳戶名稱</li>
-              <li>• 本工具屬於規劃與教育用途，不構成投資建議</li>
-              <li>• 若未來上架販售，需再補隱私政策、免責聲明、刪除機制</li>
+              <li>• 加入預設人生事件模型</li>
+              <li>• 顯示流動資產軌跡圖</li>
+              <li>• 顯示年度現金流圖</li>
+              <li>• 顯示關鍵事件時間軸</li>
+              <li>• 仍維持 local-first 與匿名試用</li>
             </ul>
             <div className="mt-6 flex gap-3">
               <button onClick={exportJson} className="rounded-2xl bg-cyan-400 px-4 py-2 font-medium text-slate-950 transition hover:bg-cyan-300">
@@ -184,33 +207,18 @@ export default function Home() {
               </div>
             </Section>
 
-            <Section title="2. 現金流" description="退休前/後支出與每月儲蓄，是退休結果最敏感的三個槓桿。">
+            <Section title="2. 現金流與資產" description="目前仍是簡化輸入，但結果已開始有顧問式圖表。">
               <div className="grid gap-4 md:grid-cols-2">
                 <NumberField label="每月收入" value={input.cashflow.monthlyIncome} onChange={(value) => setInput({ ...input, cashflow: { ...input.cashflow, monthlyIncome: value } })} />
                 <NumberField label="每月可儲蓄" value={input.cashflow.monthlySaving} onChange={(value) => setInput({ ...input, cashflow: { ...input.cashflow, monthlySaving: value } })} />
                 <NumberField label="退休前每月支出" value={input.cashflow.monthlyExpensePre} onChange={(value) => setInput({ ...input, cashflow: { ...input.cashflow, monthlyExpensePre: value } })} />
                 <NumberField label="退休後每月支出" value={input.cashflow.monthlyExpensePost} onChange={(value) => setInput({ ...input, cashflow: { ...input.cashflow, monthlyExpensePost: value } })} />
-              </div>
-            </Section>
-
-            <Section title="3. 資產與負債" description="目前先維持簡化版四大資產分類，適合匿名起步。">
-              <div className="grid gap-4 md:grid-cols-2">
                 <NumberField label="現金 / 存款" value={input.assets.cash} onChange={(value) => setInput({ ...input, assets: { ...input.assets, cash: value } })} />
                 <NumberField label="投資資產" value={input.assets.investments} onChange={(value) => setInput({ ...input, assets: { ...input.assets, investments: value } })} />
                 <NumberField label="保單現值" value={input.assets.insuranceCashValue} onChange={(value) => setInput({ ...input, assets: { ...input.assets, insuranceCashValue: value } })} />
                 <NumberField label="不動產估值" value={input.assets.realEstate} onChange={(value) => setInput({ ...input, assets: { ...input.assets, realEstate: value } })} />
                 <NumberField label="房貸餘額" value={input.liabilities.mortgage} onChange={(value) => setInput({ ...input, liabilities: { ...input.liabilities, mortgage: value } })} />
-                <NumberField label="其他貸款" value={input.liabilities.otherLoans} onChange={(value) => setInput({ ...input, liabilities: { ...input.liabilities, otherLoans: value } })} />
-              </div>
-            </Section>
-
-            <Section title="4. 退休假設" description="65 歲以前沒有勞保 / 勞退月領，因此橋接期完全靠流動資產。">
-              <div className="grid gap-4 md:grid-cols-2">
-                <NumberField label="年金開始年齡" value={input.retirement.pensionStartAge} onChange={(value) => setInput({ ...input, retirement: { ...input.retirement, pensionStartAge: value } })} />
                 <NumberField label="65 歲起每月勞保 + 勞退" value={input.retirement.monthlyPension} onChange={(value) => setInput({ ...input, retirement: { ...input.retirement, monthlyPension: value } })} />
-                <NumberField label="退休前年化報酬率 (%)" value={input.retirement.returnPre * 100} step={0.1} onChange={(value) => setInput({ ...input, retirement: { ...input.retirement, returnPre: value / 100 } })} />
-                <NumberField label="退休後年化報酬率 (%)" value={input.retirement.returnPost * 100} step={0.1} onChange={(value) => setInput({ ...input, retirement: { ...input.retirement, returnPost: value / 100 } })} />
-                <NumberField label="通膨率 (%)" value={input.retirement.inflation * 100} step={0.1} onChange={(value) => setInput({ ...input, retirement: { ...input.retirement, inflation: value / 100 } })} />
               </div>
             </Section>
           </div>
@@ -223,7 +231,6 @@ export default function Home() {
                 <MetricCard label="流動性比率" value={formatPercent(summary.liquidityRatio)} hint="流動資產 / 總負債" />
                 <MetricCard label="儲蓄率" value={formatPercent(summary.savingRatio)} hint="每月儲蓄 / 每月收入" />
               </div>
-
               <div className="mt-6 space-y-4">
                 {radarMetrics.map((metric) => (
                   <div key={metric.label} className="space-y-2">
@@ -237,7 +244,7 @@ export default function Home() {
               </div>
             </Section>
 
-            <Section title="資產配置視覺化" description="高隱私版本不需要列出細帳，只看配置就能做初步規劃。">
+            <Section title="資產配置視覺化" description="不揭露細帳，也能先看資產結構是否失衡。">
               <div className="space-y-4">
                 {assetMix.map((item) => (
                   <div key={item.label} className="space-y-2">
@@ -250,21 +257,46 @@ export default function Home() {
                 ))}
               </div>
             </Section>
-
-            <Section title="退休試算結果" description="以目前輸入作為基準，估算資金缺口與可支撐年限。">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <MetricCard label="目前可投入退休資產" value={formatCurrency(retirement.currentPortfolio)} hint="流動資產基礎" />
-                <MetricCard label="退休時資產估值" value={formatCurrency(retirement.portfolioAtRetire)} hint="考慮退休前繼續儲蓄" />
-                <MetricCard label="65 歲前橋接需求" value={formatCurrency(retirement.bridgeNeed)} hint="無年金空窗期" />
-                <MetricCard label="退休總需求現值" value={formatCurrency(retirement.totalNeed)} hint="橋接期 + 65 歲後需求" />
-                <MetricCard label="資金缺口 / 裕度" value={formatCurrency(retirement.gap)} hint={retirement.gap >= 0 ? "目前假設下可支撐" : "需延後退休或降支出"} />
-                <MetricCard label="可支撐到年齡" value={`${retirement.sustainAge} 歲`} hint={`評等 ${retirement.healthGrade}`} />
-              </div>
-            </Section>
           </div>
         </div>
 
-        <Section title="三情境比較" description="這是第二版最重要的產品功能：不要只給單一答案，而是讓使用者看到範圍。">
+        <Section title="流動資產軌跡圖" description="這是 V4 的核心圖：看見未來 15 年流動資產如何受人生事件影響。">
+          <MiniBarChart values={timeline.map((row) => row.endAsset)} colorClass="bg-cyan-400" formatter={formatCurrency} />
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <MetricCard label="15 年後流動資產" value={formatCurrency(timeline.at(-1)?.endAsset ?? 0)} hint="若出現負值，代表模型已顯示結構性風險" />
+            <MetricCard label="最低資產年份" value={`${timeline.reduce((min, row) => (row.endAsset < min.endAsset ? row : min), timeline[0]).year}`} hint="這通常就是最需要補強的危險年份" />
+            <MetricCard label="退休評等" value={retirement.healthGrade} hint={`可支撐到 ${retirement.sustainAge} 歲`} />
+          </div>
+        </Section>
+
+        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <Section title="年度現金流圖" description="看每年因投資、儲蓄、年金與事件造成的淨現金流變化。">
+            <MiniBarChart values={timeline.map((row) => row.income + row.investmentGain + row.eventNet - row.expense)} colorClass="bg-emerald-400" formatter={formatCurrency} />
+            <div className="mt-4 text-sm leading-6 text-slate-300">
+              這張圖不是只看投資報酬，而是把退休前儲蓄、退休後年金、一次性事件支出 / 收入一起看，才更接近真正顧問的分析方式。
+            </div>
+          </Section>
+
+          <Section title="關鍵事件時間軸" description="現在的事件仍是預設版本，下一步可改成可編輯與對話引導。">
+            <div className="space-y-4">
+              {timeline.filter((row) => row.notes.length > 0).map((row) => (
+                <div key={row.year} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-base font-semibold text-white">{row.year} 年（{row.age} 歲）</div>
+                      <div className="mt-1 text-sm text-slate-300">{row.notes.join("、")}</div>
+                    </div>
+                    <div className={`rounded-full px-3 py-1 text-xs ${row.eventNet >= 0 ? "bg-emerald-400/20 text-emerald-200" : "bg-rose-400/20 text-rose-200"}`}>
+                      {row.eventNet >= 0 ? `+ ${formatCurrency(row.eventNet)}` : formatCurrency(row.eventNet)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </div>
+
+        <Section title="三情境比較" description="不要只給單一答案，而是讓使用者看到區間與決策敏感度。">
           <div className="grid gap-4 lg:grid-cols-3">
             {scenarios.map((scenario) => (
               <div key={scenario.key} className="rounded-3xl border border-white/10 bg-slate-950/40 p-5">
@@ -287,7 +319,7 @@ export default function Home() {
         </Section>
 
         <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <Section title="顧問式摘要" description="把公開研究裡財務顧問的 discovery 與 prioritization 能力，轉成產品化敘事。">
+          <Section title="顧問式摘要" description="把顧問會說的人話放進產品，讓使用者知道先補哪裡。">
             <ul className="space-y-3 text-sm leading-6 text-slate-200">
               {advisorInsight.narrative.map((item) => (
                 <li key={item}>• {item}</li>
@@ -310,35 +342,6 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          </Section>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <Section title="你可能忽略的支出 / 收入 / 保障" description="這一塊就是讓產品開始像財務顧問，而不是只會等你輸入資料。">
-            <div className="grid gap-4 md:grid-cols-2">
-              {advisorInsight.blindSpots.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-base font-semibold text-white">{item.title}</div>
-                    <span className={`rounded-full px-3 py-1 text-xs ${item.category === "expense" ? "bg-rose-400/20 text-rose-200" : item.category === "income" ? "bg-emerald-400/20 text-emerald-200" : "bg-indigo-400/20 text-indigo-200"}`}>
-                      {item.category === "expense" ? "支出" : item.category === "income" ? "收入" : "保障"}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-200">{item.prompt}</p>
-                  <p className="mt-2 text-xs leading-5 text-slate-400">{item.rationale}</p>
-                </div>
-              ))}
-            </div>
-          </Section>
-
-          <Section title="上架前還需要補的功能" description="V3.5 開始有顧問感，但正式販售版還需要更完整的產品保護層。">
-            <ol className="space-y-3 text-sm leading-6 text-slate-200">
-              <li>1. 事件資料模型：把教育、換屋、買車、婚嫁、保險與賣房正式變成 timeline data。</li>
-              <li>2. client-side encryption：讓本地資料更接近高隱私正式版。</li>
-              <li>3. 視覺化圖表：流動資產軌跡、年度現金流分項、事件時間軸。</li>
-              <li>4. 對話式訪談流程：一步一步像顧問 discovery，而不是一次填完表格。</li>
-              <li>5. 法務頁與部署：隱私政策、免責聲明、GitHub / Vercel 上線。</li>
-            </ol>
           </Section>
         </div>
       </div>
