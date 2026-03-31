@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  buildRadarMetrics,
   calculateRetirement,
+  calculateScenarios,
   calculateSummary,
   defaultInput,
   FinancialInput,
@@ -11,6 +13,24 @@ import {
 } from "@/lib/finance";
 
 const storageKey = "private-finance-agent:v1";
+
+function loadInitialInput(): FinancialInput {
+  if (typeof window === "undefined") {
+    return defaultInput;
+  }
+
+  const raw = window.localStorage.getItem(storageKey);
+  if (!raw) {
+    return defaultInput;
+  }
+
+  try {
+    return JSON.parse(raw) as FinancialInput;
+  } catch {
+    window.localStorage.removeItem(storageKey);
+    return defaultInput;
+  }
+}
 
 type SectionProps = {
   title: string;
@@ -62,22 +82,12 @@ function MetricCard({ label, value, hint }: { label: string; value: string; hint
   );
 }
 
-function loadInitialInput(): FinancialInput {
-  if (typeof window === "undefined") {
-    return defaultInput;
-  }
-
-  const raw = window.localStorage.getItem(storageKey);
-  if (!raw) {
-    return defaultInput;
-  }
-
-  try {
-    return JSON.parse(raw) as FinancialInput;
-  } catch {
-    window.localStorage.removeItem(storageKey);
-    return defaultInput;
-  }
+function ProgressBar({ value, colorClass }: { value: number; colorClass: string }) {
+  return (
+    <div className="h-2 w-full rounded-full bg-white/10">
+      <div className={`h-2 rounded-full ${colorClass}`} style={{ width: `${Math.max(4, Math.min(100, value))}%` }} />
+    </div>
+  );
 }
 
 export default function Home() {
@@ -89,6 +99,16 @@ export default function Home() {
 
   const summary = useMemo(() => calculateSummary(input), [input]);
   const retirement = useMemo(() => calculateRetirement(input), [input]);
+  const scenarios = useMemo(() => calculateScenarios(input), [input]);
+  const radarMetrics = useMemo(() => buildRadarMetrics(summary), [summary]);
+
+  const totalAssetForChart = Math.max(summary.totalAssets, 1);
+  const assetMix = [
+    { label: "現金", value: input.assets.cash, color: "bg-cyan-400" },
+    { label: "投資", value: input.assets.investments, color: "bg-indigo-400" },
+    { label: "保單", value: input.assets.insuranceCashValue, color: "bg-fuchsia-400" },
+    { label: "不動產", value: input.assets.realEstate, color: "bg-emerald-400" },
+  ];
 
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(input, null, 2)], { type: "application/json" });
@@ -108,44 +128,38 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#164e63,#020617_55%)] px-6 py-10 text-white">
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
-        <header className="grid gap-6 rounded-[2rem] border border-cyan-400/20 bg-slate-950/50 p-8 shadow-2xl shadow-cyan-950/20 lg:grid-cols-[1.3fr_0.7fr]">
+        <header className="grid gap-6 rounded-[2rem] border border-cyan-400/20 bg-slate-950/50 p-8 shadow-2xl shadow-cyan-950/20 lg:grid-cols-[1.2fr_0.8fr]">
           <div>
             <div className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-1 text-xs tracking-[0.2em] text-cyan-200">
-              PRIVATE FINANCE AGENT
+              PRIVATE FINANCE AGENT V2
             </div>
             <h1 className="mt-4 text-4xl font-bold tracking-tight text-white md:text-5xl">
-              高隱私個人財務規劃 MVP
+              高隱私財務規劃助手
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-7 text-slate-300 md:text-lg">
-              這是第一版 local-first 財務助理：資料預設只保存在你的瀏覽器，不需要先登入，就能完成資產負債總覽、財務健康檢查與退休橋接試算。
+              第二版加入三情境比較、視覺化財務指標與產品化摘要。目標不是讓使用者把家底交出來，而是讓他在匿名、低心理壓力的前提下，先看懂自己的財務健康與退休可能性。
             </p>
             <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-300">
-              <span className="rounded-full border border-white/10 px-3 py-1">匿名試算</span>
-              <span className="rounded-full border border-white/10 px-3 py-1">65 歲前空窗期分析</span>
-              <span className="rounded-full border border-white/10 px-3 py-1">退休缺口估算</span>
-              <span className="rounded-full border border-white/10 px-3 py-1">財務健康指標</span>
+              <span className="rounded-full border border-white/10 px-3 py-1">local-first</span>
+              <span className="rounded-full border border-white/10 px-3 py-1">三情境試算</span>
+              <span className="rounded-full border border-white/10 px-3 py-1">匿名體驗</span>
+              <span className="rounded-full border border-white/10 px-3 py-1">退休橋接分析</span>
             </div>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="text-sm text-slate-300">隱私原則</div>
+            <div className="text-sm text-slate-300">隱私與合規提醒</div>
             <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-200">
-              <li>• 預設只使用瀏覽器 localStorage，不上傳到伺服器</li>
-              <li>• 不要求姓名、手機、身分證或帳戶明細</li>
-              <li>• 可隨時匯出 JSON，或重設清除本機資料</li>
-              <li>• 第二版可再加入加密儲存與匿名雲端同步</li>
+              <li>• 預設只保存在本機瀏覽器，這版沒有後端帳號系統</li>
+              <li>• 不要求真名、電話、身分證、詳細帳戶名稱</li>
+              <li>• 本工具屬於規劃與教育用途，不構成投資建議</li>
+              <li>• 若未來上架販售，需再補隱私政策、免責聲明、刪除機制</li>
             </ul>
             <div className="mt-6 flex gap-3">
-              <button
-                onClick={exportJson}
-                className="rounded-2xl bg-cyan-400 px-4 py-2 font-medium text-slate-950 transition hover:bg-cyan-300"
-              >
-                匯出資料
+              <button onClick={exportJson} className="rounded-2xl bg-cyan-400 px-4 py-2 font-medium text-slate-950 transition hover:bg-cyan-300">
+                匯出 JSON
               </button>
-              <button
-                onClick={resetData}
-                className="rounded-2xl border border-white/15 px-4 py-2 font-medium text-white transition hover:bg-white/10"
-              >
-                重設
+              <button onClick={resetData} className="rounded-2xl border border-white/15 px-4 py-2 font-medium text-white transition hover:bg-white/10">
+                清除本機資料
               </button>
             </div>
           </div>
@@ -158,9 +172,9 @@ export default function Home() {
           <MetricCard label="流動資產" value={formatCurrency(summary.liquidAssets)} hint={`流動性比率 ${formatPercent(summary.liquidityRatio)}`} />
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-6">
-            <Section title="1. 個人與退休設定" description="用最少欄位建立退休時間軸。之後可再擴充家庭、扶養與風險承受度。">
+            <Section title="1. 個人與退休設定" description="先建立退休時間軸，再逐步微調敏感參數。">
               <div className="grid gap-4 md:grid-cols-3">
                 <NumberField label="目前年齡" value={input.profile.currentAge} onChange={(value) => setInput({ ...input, profile: { ...input.profile, currentAge: value } })} />
                 <NumberField label="退休年齡" value={input.profile.retireAge} onChange={(value) => setInput({ ...input, profile: { ...input.profile, retireAge: value } })} />
@@ -168,7 +182,7 @@ export default function Home() {
               </div>
             </Section>
 
-            <Section title="2. 現金流" description="退休前每月可持續儲蓄，是最敏感的變數之一。">
+            <Section title="2. 現金流" description="退休前/後支出與每月儲蓄，是退休結果最敏感的三個槓桿。">
               <div className="grid gap-4 md:grid-cols-2">
                 <NumberField label="每月收入" value={input.cashflow.monthlyIncome} onChange={(value) => setInput({ ...input, cashflow: { ...input.cashflow, monthlyIncome: value } })} />
                 <NumberField label="每月可儲蓄" value={input.cashflow.monthlySaving} onChange={(value) => setInput({ ...input, cashflow: { ...input.cashflow, monthlySaving: value } })} />
@@ -177,7 +191,7 @@ export default function Home() {
               </div>
             </Section>
 
-            <Section title="3. 資產與負債" description="這一版先採四大資產類別，之後可拆成帳戶、保單、ETF 與房產明細。">
+            <Section title="3. 資產與負債" description="目前先維持簡化版四大資產分類，適合匿名起步。">
               <div className="grid gap-4 md:grid-cols-2">
                 <NumberField label="現金 / 存款" value={input.assets.cash} onChange={(value) => setInput({ ...input, assets: { ...input.assets, cash: value } })} />
                 <NumberField label="投資資產" value={input.assets.investments} onChange={(value) => setInput({ ...input, assets: { ...input.assets, investments: value } })} />
@@ -200,43 +214,95 @@ export default function Home() {
           </div>
 
           <div className="space-y-6">
-            <Section title="財務健康指標" description="第一版先提供最核心的四個燈號。">
+            <Section title="財務健康儀表板" description="先用產品化視角，將使用者最關心的安全感可視化。">
               <div className="grid gap-4 sm:grid-cols-2">
                 <MetricCard label="負債資產比" value={formatPercent(summary.debtAssetRatio)} hint="理想通常低於 40%~45%" />
                 <MetricCard label="淨值比" value={formatPercent(summary.solvencyRatio)} hint="越高代表財務緩衝越強" />
                 <MetricCard label="流動性比率" value={formatPercent(summary.liquidityRatio)} hint="流動資產 / 總負債" />
                 <MetricCard label="儲蓄率" value={formatPercent(summary.savingRatio)} hint="每月儲蓄 / 每月收入" />
               </div>
-            </Section>
 
-            <Section title="退休試算結果" description="以目前流動資產為退休資金基礎，估算橋接期與全退休期間需求。">
-              <div className="space-y-4 text-sm text-slate-200">
-                <div className="rounded-2xl bg-slate-950/40 p-4">
-                  <div className="text-slate-400">目前可投入退休的流動資產</div>
-                  <div className="mt-2 text-2xl font-semibold">{formatCurrency(retirement.currentPortfolio)}</div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <MetricCard label="退休時資產估值" value={formatCurrency(retirement.portfolioAtRetire)} hint="目前流動資產加上退休前累積" />
-                  <MetricCard label="65 歲前橋接需求" value={formatCurrency(retirement.bridgeNeed)} hint="沒有年金收入的空窗期" />
-                  <MetricCard label="退休總需求現值" value={formatCurrency(retirement.totalNeed)} hint="橋接期 + 65 歲後現金流需求" />
-                  <MetricCard label="資金缺口 / 裕度" value={formatCurrency(retirement.gap)} hint={retirement.gap >= 0 ? "正值代表目前假設下可支撐" : "負值代表需延後退休或降支出"} />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <MetricCard label="可支撐到年齡" value={`${retirement.sustainAge} 歲`} hint="根據目前假設的模擬結果" />
-                  <MetricCard label="財務評等" value={retirement.healthGrade} hint={retirement.healthGrade === "A" ? "A：健康" : retirement.healthGrade === "B" ? "B：可優化" : "C：需調整"} />
-                </div>
+              <div className="mt-6 space-y-4">
+                {radarMetrics.map((metric) => (
+                  <div key={metric.label} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm text-slate-300">
+                      <span>{metric.label}</span>
+                      <span>{metric.value.toFixed(0)} / 100</span>
+                    </div>
+                    <ProgressBar value={metric.value} colorClass="bg-gradient-to-r from-cyan-400 to-emerald-400" />
+                  </div>
+                ))}
               </div>
             </Section>
 
-            <Section title="規劃引導" description="這一版先示範 agent 應如何追問，未來可接上真正對話 agent。">
-              <ol className="space-y-3 text-sm leading-6 text-slate-200">
-                <li>1. 如果你在 60 歲退休、65 歲才開始月領年金，中間 5 年是否願意維持較低支出？</li>
-                <li>2. 你的投資資產中，有多少比例屬於高波動資產？退休前是否需要逐步降低風險？</li>
-                <li>3. 除了勞保 / 勞退外，是否有租金、股息或其他被動收入可納入 65 歲後現金流？</li>
-                <li>4. 若目標是提升退休成功率，你比較願意：延後退休、降低退休支出，還是增加每月儲蓄？</li>
-              </ol>
+            <Section title="資產配置視覺化" description="高隱私版本不需要列出細帳，只看配置就能做初步規劃。">
+              <div className="space-y-4">
+                {assetMix.map((item) => (
+                  <div key={item.label} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm text-slate-300">
+                      <span>{item.label}</span>
+                      <span>{formatCurrency(item.value)}</span>
+                    </div>
+                    <ProgressBar value={(item.value / totalAssetForChart) * 100} colorClass={item.color} />
+                  </div>
+                ))}
+              </div>
+            </Section>
+
+            <Section title="退休試算結果" description="以目前輸入作為基準，估算資金缺口與可支撐年限。">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <MetricCard label="目前可投入退休資產" value={formatCurrency(retirement.currentPortfolio)} hint="流動資產基礎" />
+                <MetricCard label="退休時資產估值" value={formatCurrency(retirement.portfolioAtRetire)} hint="考慮退休前繼續儲蓄" />
+                <MetricCard label="65 歲前橋接需求" value={formatCurrency(retirement.bridgeNeed)} hint="無年金空窗期" />
+                <MetricCard label="退休總需求現值" value={formatCurrency(retirement.totalNeed)} hint="橋接期 + 65 歲後需求" />
+                <MetricCard label="資金缺口 / 裕度" value={formatCurrency(retirement.gap)} hint={retirement.gap >= 0 ? "目前假設下可支撐" : "需延後退休或降支出"} />
+                <MetricCard label="可支撐到年齡" value={`${retirement.sustainAge} 歲`} hint={`評等 ${retirement.healthGrade}`} />
+              </div>
             </Section>
           </div>
+        </div>
+
+        <Section title="三情境比較" description="這是第二版最重要的產品功能：不要只給單一答案，而是讓使用者看到範圍。">
+          <div className="grid gap-4 lg:grid-cols-3">
+            {scenarios.map((scenario) => (
+              <div key={scenario.key} className="rounded-3xl border border-white/10 bg-slate-950/40 p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-white">{scenario.label}</h3>
+                  <span className={`rounded-full px-3 py-1 text-xs ${scenario.result.healthGrade === "A" ? "bg-emerald-400/20 text-emerald-200" : scenario.result.healthGrade === "B" ? "bg-amber-400/20 text-amber-200" : "bg-rose-400/20 text-rose-200"}`}>
+                    {scenario.result.healthGrade}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-slate-400">{scenario.adjustment}</p>
+                <div className="mt-4 space-y-3 text-sm text-slate-200">
+                  <div className="flex items-center justify-between"><span>退休時資產</span><span>{formatCurrency(scenario.result.portfolioAtRetire)}</span></div>
+                  <div className="flex items-center justify-between"><span>退休總需求</span><span>{formatCurrency(scenario.result.totalNeed)}</span></div>
+                  <div className="flex items-center justify-between"><span>缺口 / 裕度</span><span>{formatCurrency(scenario.result.gap)}</span></div>
+                  <div className="flex items-center justify-between"><span>可支撐到</span><span>{scenario.result.sustainAge} 歲</span></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <Section title="Agent 規劃摘要" description="這不是最後的建議，而是引導使用者做下一步決策。">
+            <ul className="space-y-3 text-sm leading-6 text-slate-200">
+              <li>• 若保守情境下缺口明顯為負，優先檢查退休後支出是否能下修 10%~15%。</li>
+              <li>• 若你不想大幅降低生活品質，延後退休 2~5 年通常比追求高報酬更可控。</li>
+              <li>• 若流動性高但投資比例過低，可再評估退休前資產配置優化，但應避免過度追高風險。</li>
+              <li>• 65 歲前空窗期是核心風險點；請先確認勞保 / 勞退預估月領，再回填模型。</li>
+            </ul>
+          </Section>
+
+          <Section title="上架前還需要補的功能" description="這一版已接近 demo 可展示狀態，但離販售版仍有幾個缺口。">
+            <ol className="space-y-3 text-sm leading-6 text-slate-200">
+              <li>1. client-side encryption：讓瀏覽器端資料即使被讀到也難以理解。</li>
+              <li>2. PDF 報告輸出：讓使用者拿到真正可保存的財務規劃摘要。</li>
+              <li>3. 對話式訪談流程：把現在的靜態欄位改成一步一步引導，降低輸入壓力。</li>
+              <li>4. 法務頁：隱私政策、服務條款、免責聲明。</li>
+              <li>5. GitHub / Vercel 上線：做公開 demo 或 private preview。</li>
+            </ol>
+          </Section>
         </div>
       </div>
     </main>
