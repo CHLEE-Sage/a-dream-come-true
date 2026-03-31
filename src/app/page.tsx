@@ -1,6 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  BarChart,
+  Bar,
+  Legend,
+} from "recharts";
 import { buildAdvisorInsight } from "@/lib/advisor";
 import {
   buildRadarMetrics,
@@ -17,15 +29,9 @@ import { defaultEvents, PlanningEvent, projectTimeline } from "@/lib/timeline";
 const storageKey = "private-finance-agent:v1";
 
 function loadInitialInput(): FinancialInput {
-  if (typeof window === "undefined") {
-    return defaultInput;
-  }
-
+  if (typeof window === "undefined") return defaultInput;
   const raw = window.localStorage.getItem(storageKey);
-  if (!raw) {
-    return defaultInput;
-  }
-
+  if (!raw) return defaultInput;
   try {
     return JSON.parse(raw) as FinancialInput;
   } catch {
@@ -34,11 +40,7 @@ function loadInitialInput(): FinancialInput {
   }
 }
 
-type SectionProps = {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-};
+type SectionProps = { title: string; description: string; children: React.ReactNode };
 
 function Section({ title, description, children }: SectionProps) {
   return (
@@ -52,24 +54,33 @@ function Section({ title, description, children }: SectionProps) {
   );
 }
 
-type NumberFieldProps = {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-  step?: number;
-};
-
-function NumberField({ label, value, onChange, step = 1 }: NumberFieldProps) {
+function NumberField({ label, value, onChange, step = 1 }: { label: string; value: number; onChange: (value: number) => void; step?: number }) {
   return (
     <label className="flex flex-col gap-2 text-sm text-slate-200">
       <span>{label}</span>
-      <input
-        type="number"
-        step={step}
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none ring-0 transition focus:border-cyan-400"
-      />
+      <input type="number" step={step} value={Number.isFinite(value) ? value : 0} onChange={(event) => onChange(Number(event.target.value))} className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none transition focus:border-cyan-400" />
+    </label>
+  );
+}
+
+function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="flex flex-col gap-2 text-sm text-slate-200">
+      <span>{label}</span>
+      <input type="text" value={value} onChange={(event) => onChange(event.target.value)} className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none transition focus:border-cyan-400" />
+    </label>
+  );
+}
+
+function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
+  return (
+    <label className="flex flex-col gap-2 text-sm text-slate-200">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none transition focus:border-cyan-400">
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
     </label>
   );
 }
@@ -92,34 +103,10 @@ function ProgressBar({ value, colorClass }: { value: number; colorClass: string 
   );
 }
 
-function MiniBarChart({
-  values,
-  colorClass,
-  formatter,
-}: {
-  values: number[];
-  colorClass: string;
-  formatter: (value: number) => string;
-}) {
-  const max = Math.max(...values.map((value) => Math.abs(value)), 1);
-  return (
-    <div className="flex h-44 items-end gap-2 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-      {values.map((value, index) => {
-        const height = `${Math.max(8, (Math.abs(value) / max) * 100)}%`;
-        return (
-          <div key={`${index}-${value}`} className="group flex flex-1 flex-col items-center justify-end gap-2">
-            <div className="text-[10px] text-slate-500 opacity-0 transition group-hover:opacity-100">{formatter(value)}</div>
-            <div className={`w-full rounded-t-lg ${colorClass}`} style={{ height }} />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function Home() {
   const [input, setInput] = useState<FinancialInput>(loadInitialInput);
-  const [events] = useState<PlanningEvent[]>(() => defaultEvents(new Date().getFullYear()));
+  const [events, setEvents] = useState<PlanningEvent[]>(() => defaultEvents(new Date().getFullYear()));
+  const [newEvent, setNewEvent] = useState<PlanningEvent>({ id: "custom-new", year: new Date().getFullYear() + 1, label: "", type: "expense", category: "education", amount: 0 });
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify(input));
@@ -141,7 +128,7 @@ export default function Home() {
   ];
 
   const exportJson = () => {
-    const blob = new Blob([JSON.stringify(input, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ input, events }, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -152,7 +139,19 @@ export default function Home() {
 
   const resetData = () => {
     setInput(defaultInput);
+    setEvents(defaultEvents(new Date().getFullYear()));
     window.localStorage.removeItem(storageKey);
+  };
+
+  const addEvent = () => {
+    if (!newEvent.label || newEvent.amount === 0) return;
+    const eventId = `custom-${crypto.randomUUID()}`;
+    setEvents((prev) => [...prev, { ...newEvent, id: eventId }].sort((a, b) => a.year - b.year));
+    setNewEvent({ ...newEvent, id: "custom-new", label: "", amount: 0 });
+  };
+
+  const removeEvent = (id: string) => {
+    setEvents((prev) => prev.filter((event) => event.id !== id));
   };
 
   return (
@@ -160,32 +159,21 @@ export default function Home() {
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
         <header className="grid gap-6 rounded-[2rem] border border-cyan-400/20 bg-slate-950/50 p-8 shadow-2xl shadow-cyan-950/20 lg:grid-cols-[1.2fr_0.8fr]">
           <div>
-            <div className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-1 text-xs tracking-[0.2em] text-cyan-200">
-              PRIVATE FINANCE AGENT V4
-            </div>
-            <h1 className="mt-4 text-4xl font-bold tracking-tight text-white md:text-5xl">
-              事件時間軸 + 顧問圖表版
-            </h1>
-            <p className="mt-4 max-w-3xl text-base leading-7 text-slate-300 md:text-lg">
-              V4 開始把人生事件真正放進模型：不只看退休數字，而是看教育、買車、裝潢、賣房、婚嫁與保險補強如何改變你的流動資產軌跡與年度現金流。
-            </p>
+            <div className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-1 text-xs tracking-[0.2em] text-cyan-200">PRIVATE FINANCE AGENT V4.5</div>
+            <h1 className="mt-4 text-4xl font-bold tracking-tight text-white md:text-5xl">可編輯事件 + 正式圖表版</h1>
+            <p className="mt-4 max-w-3xl text-base leading-7 text-slate-300 md:text-lg">V4.5 將事件變成可編輯資料，並改用正式圖表呈現流動資產軌跡與年度現金流。這讓工具更接近真正的財務顧問工作台，而不是靜態試算頁。</p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="text-sm text-slate-300">這一版的突破</div>
+            <div className="text-sm text-slate-300">這一版新增</div>
             <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-200">
-              <li>• 加入預設人生事件模型</li>
-              <li>• 顯示流動資產軌跡圖</li>
-              <li>• 顯示年度現金流圖</li>
-              <li>• 顯示關鍵事件時間軸</li>
-              <li>• 仍維持 local-first 與匿名試用</li>
+              <li>• 可自行新增人生事件</li>
+              <li>• Recharts 正式折線 / 柱狀圖</li>
+              <li>• 事件對圖表即時生效</li>
+              <li>• 更像顧問工作台的畫面結構</li>
             </ul>
             <div className="mt-6 flex gap-3">
-              <button onClick={exportJson} className="rounded-2xl bg-cyan-400 px-4 py-2 font-medium text-slate-950 transition hover:bg-cyan-300">
-                匯出 JSON
-              </button>
-              <button onClick={resetData} className="rounded-2xl border border-white/15 px-4 py-2 font-medium text-white transition hover:bg-white/10">
-                清除本機資料
-              </button>
+              <button onClick={exportJson} className="rounded-2xl bg-cyan-400 px-4 py-2 font-medium text-slate-950 transition hover:bg-cyan-300">匯出 JSON</button>
+              <button onClick={resetData} className="rounded-2xl border border-white/15 px-4 py-2 font-medium text-white transition hover:bg-white/10">清除本機資料</button>
             </div>
           </div>
         </header>
@@ -199,32 +187,46 @@ export default function Home() {
 
         <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-6">
-            <Section title="1. 個人與退休設定" description="先建立退休時間軸，再逐步微調敏感參數。">
-              <div className="grid gap-4 md:grid-cols-3">
+            <Section title="核心輸入" description="目前先保留簡化輸入，重點放在事件與圖表推演。">
+              <div className="grid gap-4 md:grid-cols-2">
                 <NumberField label="目前年齡" value={input.profile.currentAge} onChange={(value) => setInput({ ...input, profile: { ...input.profile, currentAge: value } })} />
                 <NumberField label="退休年齡" value={input.profile.retireAge} onChange={(value) => setInput({ ...input, profile: { ...input.profile, retireAge: value } })} />
                 <NumberField label="預期壽命" value={input.profile.lifeExpectancy} onChange={(value) => setInput({ ...input, profile: { ...input.profile, lifeExpectancy: value } })} />
-              </div>
-            </Section>
-
-            <Section title="2. 現金流與資產" description="目前仍是簡化輸入，但結果已開始有顧問式圖表。">
-              <div className="grid gap-4 md:grid-cols-2">
-                <NumberField label="每月收入" value={input.cashflow.monthlyIncome} onChange={(value) => setInput({ ...input, cashflow: { ...input.cashflow, monthlyIncome: value } })} />
                 <NumberField label="每月可儲蓄" value={input.cashflow.monthlySaving} onChange={(value) => setInput({ ...input, cashflow: { ...input.cashflow, monthlySaving: value } })} />
                 <NumberField label="退休前每月支出" value={input.cashflow.monthlyExpensePre} onChange={(value) => setInput({ ...input, cashflow: { ...input.cashflow, monthlyExpensePre: value } })} />
                 <NumberField label="退休後每月支出" value={input.cashflow.monthlyExpensePost} onChange={(value) => setInput({ ...input, cashflow: { ...input.cashflow, monthlyExpensePost: value } })} />
                 <NumberField label="現金 / 存款" value={input.assets.cash} onChange={(value) => setInput({ ...input, assets: { ...input.assets, cash: value } })} />
                 <NumberField label="投資資產" value={input.assets.investments} onChange={(value) => setInput({ ...input, assets: { ...input.assets, investments: value } })} />
                 <NumberField label="保單現值" value={input.assets.insuranceCashValue} onChange={(value) => setInput({ ...input, assets: { ...input.assets, insuranceCashValue: value } })} />
-                <NumberField label="不動產估值" value={input.assets.realEstate} onChange={(value) => setInput({ ...input, assets: { ...input.assets, realEstate: value } })} />
                 <NumberField label="房貸餘額" value={input.liabilities.mortgage} onChange={(value) => setInput({ ...input, liabilities: { ...input.liabilities, mortgage: value } })} />
-                <NumberField label="65 歲起每月勞保 + 勞退" value={input.retirement.monthlyPension} onChange={(value) => setInput({ ...input, retirement: { ...input.retirement, monthlyPension: value } })} />
+              </div>
+            </Section>
+
+            <Section title="可編輯人生事件" description="把未來大額收支與保障補強正式放進時間軸。">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <NumberField label="年份" value={newEvent.year} onChange={(value) => setNewEvent({ ...newEvent, year: value })} />
+                <TextField label="事件名稱" value={newEvent.label} onChange={(value) => setNewEvent({ ...newEvent, label: value })} />
+                <NumberField label="金額" value={newEvent.amount} onChange={(value) => setNewEvent({ ...newEvent, amount: value })} />
+                <SelectField label="類型" value={newEvent.type} onChange={(value) => setNewEvent({ ...newEvent, type: value as PlanningEvent["type"] })} options={[{ value: "expense", label: "支出" }, { value: "income", label: "收入" }, { value: "protection", label: "保障/保費" }]} />
+                <SelectField label="分類" value={newEvent.category} onChange={(value) => setNewEvent({ ...newEvent, category: value as PlanningEvent["category"] })} options={[{ value: "education", label: "教育" }, { value: "housing", label: "房屋" }, { value: "vehicle", label: "車輛" }, { value: "family", label: "家庭" }, { value: "insurance", label: "保險" }, { value: "income", label: "收入" }, { value: "care", label: "照護" }]} />
+                <div className="flex items-end"><button onClick={addEvent} className="w-full rounded-2xl bg-emerald-400 px-4 py-3 font-medium text-slate-950 transition hover:bg-emerald-300">新增事件</button></div>
+              </div>
+              <div className="mt-6 space-y-3">
+                {events.map((event) => (
+                  <div key={event.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                    <div>
+                      <div className="font-medium text-white">{event.year}｜{event.label}</div>
+                      <div className="text-sm text-slate-400">{event.category} · {event.type === "income" ? "收入" : event.type === "expense" ? "支出" : "保障"} · {formatCurrency(event.amount)}</div>
+                    </div>
+                    <button onClick={() => removeEvent(event.id)} className="rounded-xl border border-rose-400/30 px-3 py-2 text-sm text-rose-200 transition hover:bg-rose-400/10">刪除</button>
+                  </div>
+                ))}
               </div>
             </Section>
           </div>
 
           <div className="space-y-6">
-            <Section title="財務健康儀表板" description="先用產品化視角，將使用者最關心的安全感可視化。">
+            <Section title="財務健康儀表板" description="讓使用者先知道自己目前的安全感在哪裡。">
               <div className="grid gap-4 sm:grid-cols-2">
                 <MetricCard label="負債資產比" value={formatPercent(summary.debtAssetRatio)} hint="理想通常低於 40%~45%" />
                 <MetricCard label="淨值比" value={formatPercent(summary.solvencyRatio)} hint="越高代表財務緩衝越強" />
@@ -234,24 +236,15 @@ export default function Home() {
               <div className="mt-6 space-y-4">
                 {radarMetrics.map((metric) => (
                   <div key={metric.label} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm text-slate-300">
-                      <span>{metric.label}</span>
-                      <span>{metric.value.toFixed(0)} / 100</span>
-                    </div>
+                    <div className="flex items-center justify-between text-sm text-slate-300"><span>{metric.label}</span><span>{metric.value.toFixed(0)} / 100</span></div>
                     <ProgressBar value={metric.value} colorClass="bg-gradient-to-r from-cyan-400 to-emerald-400" />
                   </div>
                 ))}
               </div>
-            </Section>
-
-            <Section title="資產配置視覺化" description="不揭露細帳，也能先看資產結構是否失衡。">
-              <div className="space-y-4">
+              <div className="mt-6 space-y-4">
                 {assetMix.map((item) => (
                   <div key={item.label} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm text-slate-300">
-                      <span>{item.label}</span>
-                      <span>{formatCurrency(item.value)}</span>
-                    </div>
+                    <div className="flex items-center justify-between text-sm text-slate-300"><span>{item.label}</span><span>{formatCurrency(item.value)}</span></div>
                     <ProgressBar value={(item.value / totalAssetForChart) * 100} colorClass={item.color} />
                   </div>
                 ))}
@@ -260,24 +253,42 @@ export default function Home() {
           </div>
         </div>
 
-        <Section title="流動資產軌跡圖" description="這是 V4 的核心圖：看見未來 15 年流動資產如何受人生事件影響。">
-          <MiniBarChart values={timeline.map((row) => row.endAsset)} colorClass="bg-cyan-400" formatter={formatCurrency} />
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            <MetricCard label="15 年後流動資產" value={formatCurrency(timeline.at(-1)?.endAsset ?? 0)} hint="若出現負值，代表模型已顯示結構性風險" />
-            <MetricCard label="最低資產年份" value={`${timeline.reduce((min, row) => (row.endAsset < min.endAsset ? row : min), timeline[0]).year}`} hint="這通常就是最需要補強的危險年份" />
-            <MetricCard label="退休評等" value={retirement.healthGrade} hint={`可支撐到 ${retirement.sustainAge} 歲`} />
-          </div>
-        </Section>
-
-        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <Section title="年度現金流圖" description="看每年因投資、儲蓄、年金與事件造成的淨現金流變化。">
-            <MiniBarChart values={timeline.map((row) => row.income + row.investmentGain + row.eventNet - row.expense)} colorClass="bg-emerald-400" formatter={formatCurrency} />
-            <div className="mt-4 text-sm leading-6 text-slate-300">
-              這張圖不是只看投資報酬，而是把退休前儲蓄、退休後年金、一次性事件支出 / 收入一起看，才更接近真正顧問的分析方式。
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Section title="流動資產軌跡圖" description="正式折線圖：看事件與退休決策如何改變未來 15 年的流動資產。">
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={timeline}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="year" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" tickFormatter={(v) => `${Math.round(Number(v) / 10000)}萬`} />
+                  <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} contentStyle={{ background: "#020617", border: "1px solid #334155" }} />
+                  <Line type="monotone" dataKey="endAsset" stroke="#22d3ee" strokeWidth={3} dot={false} name="期末流動資產" />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </Section>
 
-          <Section title="關鍵事件時間軸" description="現在的事件仍是預設版本，下一步可改成可編輯與對話引導。">
+          <Section title="年度現金流分項圖" description="正式柱狀圖：把投資增長、收入、事件與支出一起看。">
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={timeline}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="year" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" tickFormatter={(v) => `${Math.round(Number(v) / 10000)}萬`} />
+                  <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} contentStyle={{ background: "#020617", border: "1px solid #334155" }} />
+                  <Legend />
+                  <Bar dataKey="investmentGain" stackId="a" fill="#38bdf8" name="投資增長" />
+                  <Bar dataKey="income" stackId="a" fill="#22c55e" name="收入 / 儲蓄 / 年金" />
+                  <Bar dataKey="eventNet" stackId="a" fill="#f59e0b" name="事件淨額" />
+                  <Bar dataKey="expense" stackId="b" fill="#f43f5e" name="年度支出" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Section>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <Section title="關鍵事件時間軸" description="讓使用者一眼看出哪幾年要準備什麼。">
             <div className="space-y-4">
               {timeline.filter((row) => row.notes.length > 0).map((row) => (
                 <div key={row.year} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
@@ -286,25 +297,42 @@ export default function Home() {
                       <div className="text-base font-semibold text-white">{row.year} 年（{row.age} 歲）</div>
                       <div className="mt-1 text-sm text-slate-300">{row.notes.join("、")}</div>
                     </div>
-                    <div className={`rounded-full px-3 py-1 text-xs ${row.eventNet >= 0 ? "bg-emerald-400/20 text-emerald-200" : "bg-rose-400/20 text-rose-200"}`}>
-                      {row.eventNet >= 0 ? `+ ${formatCurrency(row.eventNet)}` : formatCurrency(row.eventNet)}
-                    </div>
+                    <div className={`rounded-full px-3 py-1 text-xs ${row.eventNet >= 0 ? "bg-emerald-400/20 text-emerald-200" : "bg-rose-400/20 text-rose-200"}`}>{row.eventNet >= 0 ? `+ ${formatCurrency(row.eventNet)}` : formatCurrency(row.eventNet)}</div>
                   </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section title="顧問式摘要與缺口排序" description="現在不只顯示結果，也會幫你整理應先補哪個洞。">
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="text-base font-semibold text-white">顧問摘要</div>
+                <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-200">
+                  {advisorInsight.narrative.map((item) => (<li key={item}>• {item}</li>))}
+                </ul>
+              </div>
+              {advisorInsight.gaps.map((gap) => (
+                <div key={gap.title} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-base font-semibold text-white">{gap.title}</div>
+                    <span className={`rounded-full px-3 py-1 text-xs ${gap.priority === "critical" ? "bg-rose-400/20 text-rose-200" : gap.priority === "important" ? "bg-amber-400/20 text-amber-200" : "bg-cyan-400/20 text-cyan-200"}`}>{gap.priority === "critical" ? "先補" : gap.priority === "important" ? "接著補" : "之後優化"}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-300">{gap.reason}</p>
+                  <p className="mt-2 text-sm text-cyan-200">建議行動：{gap.action}</p>
                 </div>
               ))}
             </div>
           </Section>
         </div>
 
-        <Section title="三情境比較" description="不要只給單一答案，而是讓使用者看到區間與決策敏感度。">
+        <Section title="三情境比較" description="保守 / 基準 / 積極，讓使用者看到範圍而不是單點答案。">
           <div className="grid gap-4 lg:grid-cols-3">
             {scenarios.map((scenario) => (
               <div key={scenario.key} className="rounded-3xl border border-white/10 bg-slate-950/40 p-5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-white">{scenario.label}</h3>
-                  <span className={`rounded-full px-3 py-1 text-xs ${scenario.result.healthGrade === "A" ? "bg-emerald-400/20 text-emerald-200" : scenario.result.healthGrade === "B" ? "bg-amber-400/20 text-amber-200" : "bg-rose-400/20 text-rose-200"}`}>
-                    {scenario.result.healthGrade}
-                  </span>
+                  <span className={`rounded-full px-3 py-1 text-xs ${scenario.result.healthGrade === "A" ? "bg-emerald-400/20 text-emerald-200" : scenario.result.healthGrade === "B" ? "bg-amber-400/20 text-amber-200" : "bg-rose-400/20 text-rose-200"}`}>{scenario.result.healthGrade}</span>
                 </div>
                 <p className="mt-2 text-sm text-slate-400">{scenario.adjustment}</p>
                 <div className="mt-4 space-y-3 text-sm text-slate-200">
@@ -317,33 +345,6 @@ export default function Home() {
             ))}
           </div>
         </Section>
-
-        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <Section title="顧問式摘要" description="把顧問會說的人話放進產品，讓使用者知道先補哪裡。">
-            <ul className="space-y-3 text-sm leading-6 text-slate-200">
-              {advisorInsight.narrative.map((item) => (
-                <li key={item}>• {item}</li>
-              ))}
-            </ul>
-          </Section>
-
-          <Section title="缺口優先順序" description="先補基礎安全，再補中期壓力，最後做優化。">
-            <div className="space-y-4">
-              {advisorInsight.gaps.map((gap) => (
-                <div key={gap.title} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-base font-semibold text-white">{gap.title}</div>
-                    <span className={`rounded-full px-3 py-1 text-xs ${gap.priority === "critical" ? "bg-rose-400/20 text-rose-200" : gap.priority === "important" ? "bg-amber-400/20 text-amber-200" : "bg-cyan-400/20 text-cyan-200"}`}>
-                      {gap.priority === "critical" ? "先補" : gap.priority === "important" ? "接著補" : "之後優化"}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-300">{gap.reason}</p>
-                  <p className="mt-2 text-sm text-cyan-200">建議行動：{gap.action}</p>
-                </div>
-              ))}
-            </div>
-          </Section>
-        </div>
       </div>
     </main>
   );
