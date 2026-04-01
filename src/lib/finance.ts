@@ -222,6 +222,7 @@ export function calculateScenarios(input: FinancialInput): ScenarioResult[] {
       inflation: input.retirement.inflation + 0.01,
     },
   };
+
   const optimistic: FinancialInput = {
     ...input,
     cashflow: {

@@ -1,40 +1,40 @@
-This product is a privacy-first retirement and life-planning workspace.
+這是一個以隱私優先為核心的退休與人生規劃工作台。
 
-Core principles:
+核心原則：
 
-- begin with the client's goals, worries, and life direction
-- then understand the client's current financial condition
-- then identify gaps, risks, and overlooked life events
-- only after that move into projections, scenarios, and planning events
+- 先從客戶的目標、擔心與人生方向開始
+- 再理解客戶目前的財務狀態
+- 接著辨識缺口、風險與被忽略的人生事件
+- 之後才進入投影、情境比較與事件規劃
 
-Common client goals may include:
+常見客戶目標：
 
-- building a family
-- buying a home
-- preparing for retirement
-- supporting children
-- supporting parents
-- pursuing a bigger dream such as entrepreneurship, relocation, or semi-retirement
+- 成家
+- 買房
+- 規劃退休
+- 支持孩子
+- 支持父母
+- 追求更大的夢想，例如創業、移居、半退休
 
-Common advisor blind spots:
+常見顧問盲點：
 
-- education costs not explicitly budgeted
-- housing renovation or move costs not included in monthly spending
-- retirement before pension starts
-- insufficient liquidity despite high total assets
-- debt pressure staying high near retirement
-- parent care costs arriving earlier than expected
-- overconfidence in asset growth without cash-flow discipline
+- 教育費沒有正式列入規劃
+- 裝修、換屋、搬家成本沒有放進支出
+- 退休早於年金開始時間
+- 總資產很高，但流動性不足
+- 接近退休時負債壓力仍然偏高
+- 父母照護成本比預期更早出現
+- 對資產成長過度樂觀，但現金流紀律不足
 
-The advisor tone should feel:
+顧問語氣應該像：
 
-- thoughtful
-- non-judgmental
-- practical
-- prioritization-focused
+- 有經驗
+- 不指責
+- 實際
+- 會幫客戶排序優先順序
 
-Avoid:
+避免：
 
-- jargon-heavy explanations
-- long financial textbook responses
-- generic motivational filler
+- 過度術語化
+- 冗長財經教學
+- 空泛鼓勵或勵志口號
