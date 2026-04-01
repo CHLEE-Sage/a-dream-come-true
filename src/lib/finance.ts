@@ -49,6 +49,8 @@ export type FinancialSummary = {
   solvencyRatio: number;
   liquidityRatio: number;
   savingRatio: number;
+  emergencyFundMonths: number;
+  monthlyFreeCashflow: number;
 };
 
 export type RetirementResult = {
@@ -68,12 +70,14 @@ export type ScenarioResult = {
   result: RetirementResult;
 };
 
+export type RadarMetric = {
+  label: string;
+  value: number;
+  hint: string;
+};
+
 export const defaultInput: FinancialInput = {
-  profile: {
-    currentAge: 50,
-    retireAge: 60,
-    lifeExpectancy: 90,
-  },
+  profile: { currentAge: 50, retireAge: 60, lifeExpectancy: 90 },
   cashflow: {
     monthlyIncome: 150000,
     monthlySaving: 80000,
@@ -86,11 +90,7 @@ export const defaultInput: FinancialInput = {
     insuranceCashValue: 2500000,
     realEstate: 33000000,
   },
-  liabilities: {
-    mortgage: 18000000,
-    otherLoans: 300000,
-    creditDebt: 0,
-  },
+  liabilities: { mortgage: 18000000, otherLoans: 300000, creditDebt: 0 },
   retirement: {
     pensionStartAge: 65,
     monthlyPension: 30000,
@@ -100,76 +100,74 @@ export const defaultInput: FinancialInput = {
   },
 };
 
+function divide(a: number, b: number) {
+  return b === 0 ? 0 : a / b;
+}
+
 export function calculateSummary(input: FinancialInput): FinancialSummary {
   const totalAssets =
     input.assets.cash +
     input.assets.investments +
     input.assets.insuranceCashValue +
     input.assets.realEstate;
-
   const totalLiabilities =
     input.liabilities.mortgage +
     input.liabilities.otherLoans +
     input.liabilities.creditDebt;
-
   const liquidAssets =
     input.assets.cash + input.assets.investments + input.assets.insuranceCashValue;
-
   const netWorth = totalAssets - totalLiabilities;
-  const debtAssetRatio = totalAssets > 0 ? totalLiabilities / totalAssets : 0;
-  const solvencyRatio = totalAssets > 0 ? netWorth / totalAssets : 0;
-  const liquidityRatio = totalLiabilities > 0 ? liquidAssets / totalLiabilities : 0;
-  const savingRatio =
-    input.cashflow.monthlyIncome > 0
-      ? input.cashflow.monthlySaving / input.cashflow.monthlyIncome
-      : 0;
+  const monthlyCoreExpense = Math.max(input.cashflow.monthlyExpensePre, 1);
 
   return {
     totalAssets,
     totalLiabilities,
     netWorth,
     liquidAssets,
-    debtAssetRatio,
-    solvencyRatio,
-    liquidityRatio,
-    savingRatio,
+    debtAssetRatio: divide(totalLiabilities, Math.max(totalAssets, 1)),
+    solvencyRatio: divide(netWorth, Math.max(totalAssets, 1)),
+    liquidityRatio: divide(liquidAssets, Math.max(totalLiabilities, 1)),
+    savingRatio: divide(input.cashflow.monthlySaving, Math.max(input.cashflow.monthlyIncome, 1)),
+    emergencyFundMonths: divide(liquidAssets, monthlyCoreExpense),
+    monthlyFreeCashflow: input.cashflow.monthlyIncome - input.cashflow.monthlyExpensePre,
   };
 }
 
 export function calculateRetirement(input: FinancialInput): RetirementResult {
-  const summary = calculateSummary(input);
-  const currentPortfolio = summary.liquidAssets;
+  const currentPortfolio = calculateSummary(input).liquidAssets;
   const yearsToRetire = Math.max(0, input.profile.retireAge - input.profile.currentAge);
-
   let portfolioAtRetire = currentPortfolio;
-  for (let y = 0; y < yearsToRetire; y += 1) {
+
+  for (let year = 0; year < yearsToRetire; year += 1) {
     portfolioAtRetire =
-      portfolioAtRetire * (1 + input.retirement.returnPre) + input.cashflow.monthlySaving * 12;
+      portfolioAtRetire * (1 + input.retirement.returnPre) +
+      input.cashflow.monthlySaving * 12;
   }
 
-  const pensionStartAge = input.retirement.pensionStartAge;
-  const bridgeYears = Math.max(0, pensionStartAge - input.profile.retireAge);
+  const bridgeYears = Math.max(0, input.retirement.pensionStartAge - input.profile.retireAge);
   let bridgeNeed = 0;
-  for (let y = 0; y < bridgeYears; y += 1) {
-    const annualExpense = input.cashflow.monthlyExpensePost * 12 * (1 + input.retirement.inflation) ** y;
-    bridgeNeed += annualExpense / (1 + input.retirement.returnPost) ** y;
+  for (let year = 0; year < bridgeYears; year += 1) {
+    const annualExpense =
+      input.cashflow.monthlyExpensePost * 12 * (1 + input.retirement.inflation) ** year;
+    bridgeNeed += annualExpense / (1 + input.retirement.returnPost) ** year;
   }
 
   const postPensionYears = Math.max(
     0,
-    input.profile.lifeExpectancy - Math.max(input.profile.retireAge, pensionStartAge),
+    input.profile.lifeExpectancy -
+      Math.max(input.profile.retireAge, input.retirement.pensionStartAge),
   );
   let postPensionNeed = 0;
-  for (let y = 0; y < postPensionYears; y += 1) {
+  for (let year = 0; year < postPensionYears; year += 1) {
     const annualExpense =
       input.cashflow.monthlyExpensePost *
       12 *
-      (1 + input.retirement.inflation) ** (bridgeYears + y);
+      (1 + input.retirement.inflation) ** (bridgeYears + year);
     const annualPension =
-      input.retirement.monthlyPension * 12 * (1 + input.retirement.inflation) ** y;
+      input.retirement.monthlyPension * 12 * (1 + input.retirement.inflation) ** year;
     postPensionNeed +=
       Math.max(0, annualExpense - annualPension) /
-      (1 + input.retirement.returnPost) ** (bridgeYears + y);
+      (1 + input.retirement.returnPost) ** (bridgeYears + year);
   }
 
   const totalNeed = bridgeNeed + postPensionNeed;
@@ -180,25 +178,22 @@ export function calculateRetirement(input: FinancialInput): RetirementResult {
   for (let age = input.profile.retireAge; age < input.profile.lifeExpectancy; age += 1) {
     const yearsFromRetire = age - input.profile.retireAge;
     const annualExpense =
-      input.cashflow.monthlyExpensePost * 12 * (1 + input.retirement.inflation) ** yearsFromRetire;
+      input.cashflow.monthlyExpensePost *
+      12 *
+      (1 + input.retirement.inflation) ** yearsFromRetire;
     const annualPension =
-      age >= pensionStartAge
+      age >= input.retirement.pensionStartAge
         ? input.retirement.monthlyPension *
           12 *
-          (1 + input.retirement.inflation) ** Math.max(0, age - pensionStartAge)
+          (1 + input.retirement.inflation) **
+            Math.max(0, age - input.retirement.pensionStartAge)
         : 0;
-
     testPortfolio =
       testPortfolio * (1 + input.retirement.returnPost) -
       Math.max(0, annualExpense - annualPension);
-    if (testPortfolio < 0) {
-      break;
-    }
+    if (testPortfolio < 0) break;
     sustainAge = age + 1;
   }
-
-  const healthGrade =
-    gap >= 0 && sustainAge >= input.profile.lifeExpectancy ? "A" : gap > -5000000 ? "B" : "C";
 
   return {
     currentPortfolio,
@@ -207,7 +202,8 @@ export function calculateRetirement(input: FinancialInput): RetirementResult {
     totalNeed,
     gap,
     sustainAge,
-    healthGrade,
+    healthGrade:
+      gap >= 0 && sustainAge >= input.profile.lifeExpectancy ? "A" : gap >= -5000000 ? "B" : "C",
   };
 }
 
@@ -226,7 +222,6 @@ export function calculateScenarios(input: FinancialInput): ScenarioResult[] {
       inflation: input.retirement.inflation + 0.01,
     },
   };
-
   const optimistic: FinancialInput = {
     ...input,
     cashflow: {
@@ -246,35 +241,38 @@ export function calculateScenarios(input: FinancialInput): ScenarioResult[] {
     {
       key: "conservative",
       label: "保守",
-      adjustment: "低報酬 + 高通膨 + 高支出",
+      adjustment: "報酬更低、支出更高、通膨更黏。",
       result: calculateRetirement(conservative),
     },
     {
       key: "base",
       label: "基準",
-      adjustment: "使用目前輸入假設",
+      adjustment: "依目前輸入條件推估。",
       result: calculateRetirement(input),
     },
     {
       key: "optimistic",
-      label: "積極",
-      adjustment: "高儲蓄 + 較佳報酬 + 較低退休支出",
+      label: "樂觀",
+      adjustment: "儲蓄更穩、報酬更好、支出更節制。",
       result: calculateRetirement(optimistic),
     },
   ];
 }
 
-export function buildRadarMetrics(summary: FinancialSummary) {
-  const debtScore = Math.max(0, Math.min(100, (0.6 - summary.debtAssetRatio) / 0.6 * 100));
-  const solvencyScore = Math.max(0, Math.min(100, summary.solvencyRatio / 0.7 * 100));
-  const liquidityScore = Math.max(0, Math.min(100, summary.liquidityRatio / 1.2 * 100));
-  const savingScore = Math.max(0, Math.min(100, summary.savingRatio / 0.4 * 100));
+export function buildRadarMetrics(summary: FinancialSummary): RadarMetric[] {
+  const debtScore = Math.max(0, Math.min(100, ((0.65 - summary.debtAssetRatio) / 0.65) * 100));
+  const solvencyScore = Math.max(0, Math.min(100, (summary.solvencyRatio / 0.75) * 100));
+  const liquidityScore = Math.max(
+    0,
+    Math.min(100, (summary.emergencyFundMonths / 18) * 100),
+  );
+  const savingScore = Math.max(0, Math.min(100, (summary.savingRatio / 0.35) * 100));
 
   return [
-    { label: "槓桿安全", value: debtScore },
-    { label: "淨值強度", value: solvencyScore },
-    { label: "流動性", value: liquidityScore },
-    { label: "儲蓄力", value: savingScore },
+    { label: "負債壓力", value: debtScore, hint: "資產負債比越低越好。" },
+    { label: "淨值韌性", value: solvencyScore, hint: "淨值厚度決定你能承受多大波動。" },
+    { label: "流動安全", value: liquidityScore, hint: "可動用資產能撐多久最關鍵。" },
+    { label: "儲蓄紀律", value: savingScore, hint: "退休缺口通常先靠儲蓄率修補。" },
   ];
 }
 

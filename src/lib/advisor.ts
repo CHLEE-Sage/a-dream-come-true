@@ -1,12 +1,11 @@
-import { FinancialInput, FinancialSummary, RetirementResult, formatCurrency } from "./finance";
-
-export type BlindSpotItem = {
-  id: string;
-  title: string;
-  category: "expense" | "income" | "protection";
-  prompt: string;
-  rationale: string;
-};
+import { DiscoveryAnswers, RecommendedEvent } from "./discovery";
+import {
+  FinancialInput,
+  FinancialSummary,
+  RetirementResult,
+  formatCurrency,
+} from "./finance";
+import { PlanningEvent, YearProjection } from "./timeline";
 
 export type GapItem = {
   title: string;
@@ -16,198 +15,147 @@ export type GapItem = {
 };
 
 export type AdvisorInsight = {
+  headline: string;
   narrative: string[];
-  blindSpots: BlindSpotItem[];
+  strengths: string[];
+  blindSpots: string[];
   gaps: GapItem[];
 };
 
-export function buildBlindSpots(input: FinancialInput): BlindSpotItem[] {
-  const items: BlindSpotItem[] = [
-    {
-      id: "education",
-      title: "子女教育費",
-      category: "expense",
-      prompt: "未來 5~15 年是否有大學、研究所、留學或補習支出？",
-      rationale: "教育費往往不是一次性，而是連續多年現金流壓力。",
-    },
-    {
-      id: "marriage",
-      title: "小孩結婚 / 成家支援",
-      category: "expense",
-      prompt: "你是否預計在未來資助小孩結婚、買房頭期或育兒？",
-      rationale: "這類支出常被忽略，但會在特定年份形成大額現金流事件。",
-    },
-    {
-      id: "car",
-      title: "買車 / 換車",
-      category: "expense",
-      prompt: "你或家人未來幾年是否有買車、換車、保險與維修更新需求？",
-      rationale: "車輛不是只有購置費，還包含保險、稅金與維護。",
-    },
-    {
-      id: "housing",
-      title: "換屋 / 裝潢 / 搬家",
-      category: "expense",
-      prompt: "未來是否有賣房、換房、裝潢、修繕或搬家計畫？",
-      rationale: "房產交易與裝潢費用常遠高於使用者當下直覺估算。",
-    },
-    {
-      id: "sell-house",
-      title: "賣房 / 換屋釋出資金",
-      category: "income",
-      prompt: "退休前或退休後，是否可能賣房、縮宅或換屋來釋出資金？",
-      rationale: "房產處分可能是退休資金缺口的重要解法。",
-    },
-    {
-      id: "side-income",
-      title: "退休後兼職 / 顧問收入",
-      category: "income",
-      prompt: "退休後是否仍會保留顧問、接案、租金或股利收入？",
-      rationale: "很多人高估投資報酬、低估自己仍可創造的主動 / 半被動收入。",
-    },
-    {
-      id: "insurance-gap",
-      title: "保險缺口",
-      category: "protection",
-      prompt: "家庭主要收入者是否已覆蓋壽險、醫療、失能與長照風險？",
-      rationale: "若重大風險來臨，最先被破壞的通常不是投資報酬，而是整體現金流。",
-    },
-    {
-      id: "eldercare",
-      title: "父母照護 / 長照支出",
-      category: "expense",
-      prompt: "未來是否可能承擔父母醫療、看護或長照費用？",
-      rationale: "40~60 歲家庭常同時面對退休與上一代照護雙重壓力。",
-    },
-  ];
-
-  if (input.profile.currentAge < 40) {
-    return items.filter((item) => item.id !== "eldercare");
-  }
-
-  return items;
-}
-
-export function buildGapPriorities(
-  input: FinancialInput,
-  summary: FinancialSummary,
-  retirement: RetirementResult,
-): GapItem[] {
-  const gaps: GapItem[] = [];
-
-  if (summary.liquidityRatio < 0.5) {
-    gaps.push({
-      title: "流動性不足",
-      priority: "critical",
-      reason: "流動資產無法有效支撐現有負債或短期變動。",
-      action: "先提高現金緩衝與短期可用資產，再談進一步投資配置。",
-    });
-  }
-
-  if (summary.debtAssetRatio > 0.45) {
-    gaps.push({
-      title: "槓桿偏高",
-      priority: "critical",
-      reason: "負債資產比偏高，代表資產一旦波動，淨值安全邊際會快速收縮。",
-      action: "優先檢查高壓負債、房貸結構與現金流壓力。",
-    });
-  }
-
-  if (retirement.bridgeNeed > retirement.currentPortfolio * 0.4) {
-    gaps.push({
-      title: "65 歲前橋接期風險高",
-      priority: "critical",
-      reason: `退休前到年金開始前，需要先準備約 ${formatCurrency(retirement.bridgeNeed)}。`,
-      action: "優先確認是否延後退休、下修退休後支出，或建立專屬橋接資金池。",
-    });
-  }
-
-  if (retirement.gap < 0) {
-    gaps.push({
-      title: "退休缺口尚未補平",
-      priority: "important",
-      reason: "依目前假設，退休總需求高於退休時可動用資產。",
-      action: "優先比較延後退休、增加月儲蓄、降低退休支出三者的效果。",
-    });
-  }
-
-  if (summary.savingRatio < 0.2) {
-    gaps.push({
-      title: "儲蓄率偏低",
-      priority: "important",
-      reason: "若儲蓄率長期偏低，將壓縮未來所有規劃彈性。",
-      action: "先做固定支出檢視，建立月儲蓄自動化與收入分桶。",
-    });
-  }
-
-  gaps.push({
-    title: "保險缺口需獨立盤點",
-    priority: "important",
-    reason: "多數使用者會先談投資，但真正會毀掉規劃的通常是風險事件。",
-    action: "請將壽險、醫療、失能、長照分開盤點，避免把保險與投資混為一談。",
-  });
-
-  gaps.push({
-    title: "大型人生事件尚未量化",
-    priority: "optimize",
-    reason: "買車、換屋、裝潢、教育、婚嫁與父母照護通常會造成未來幾年現金流跳動。",
-    action: "把這些事件做成年份化清單，再放進現金流時間軸。",
-  });
-
-  const weight = { critical: 0, important: 1, optimize: 2 };
-  return gaps.sort((a, b) => weight[a.priority] - weight[b.priority]);
-}
-
-export function buildAdvisorNarrative(
-  input: FinancialInput,
-  summary: FinancialSummary,
-  retirement: RetirementResult,
-): string[] {
-  const notes: string[] = [];
-
-  if (retirement.gap < 0) {
-    notes.push(
-      `你目前最大的問題不是總資產太少，而是依照現在的退休年齡與支出假設，退休金缺口仍未補平。`,
-    );
-  } else {
-    notes.push(
-      `依目前假設，你的退休規劃已有基本可行性，但仍需檢查未納入的大額人生事件是否會打破這個平衡。`,
-    );
-  }
-
-  if (retirement.bridgeNeed > 0) {
-    notes.push(
-      `65 歲前的橋接期是關鍵風險，這段時間沒有勞保 / 勞退月領，必須靠流動資產獨立支撐。`,
-    );
-  }
-
-  if (summary.debtAssetRatio > 0.45) {
-    notes.push(
-      `你的槓桿偏高，代表房產或投資資產若下修，淨值安全邊際會比直覺更脆弱。`,
-    );
-  } else {
-    notes.push(`你的槓桿結構相對可控，下一步應該把注意力放在事件支出與保障缺口。`);
-  }
-
-  notes.push(
-    `若要讓這個工具更像真正顧問，下一步不應只是填更多欄位，而是把教育、換屋、買車、婚嫁、保險與賣房情境納入時間軸。`,
+export function buildAdvisorInsight(params: {
+  input: FinancialInput;
+  answers: DiscoveryAnswers;
+  summary: FinancialSummary;
+  retirement: RetirementResult;
+  timeline: YearProjection[];
+  acceptedEvents: PlanningEvent[];
+  recommendations: RecommendedEvent[];
+}): AdvisorInsight {
+  const { answers, summary, retirement, timeline, acceptedEvents, recommendations } = params;
+  const lowPoint = timeline.reduce(
+    (current, row) => (row.endAsset < current.endAsset ? row : current),
+    timeline[0],
+  );
+  const acceptedIds = new Set(
+    acceptedEvents
+      .filter((event) => event.source === "recommended")
+      .map((event) => event.id.replace(/^accepted-/, "")),
+  );
+  const openHighPriority = recommendations.filter(
+    (item) => item.priority === "high" && !acceptedIds.has(item.id),
   );
 
-  if (input.retirement.monthlyPension <= 0) {
-    notes.push(`你尚未填入 65 歲後年金收入，這會讓退休估算偏保守，也代表需要優先查詢勞保 / 勞退資料。`);
+  const narrative: string[] = [];
+  const strengths: string[] = [];
+  const blindSpots: string[] = [];
+  const gaps: GapItem[] = [];
+
+  if (retirement.healthGrade === "A") {
+    narrative.push("退休主體結構目前可行，但仍要把人生事件提前放進計畫。");
+  } else if (retirement.healthGrade === "B") {
+    narrative.push("目前不是無解，而是需要更早管理現金流銜接。");
+  } else {
+    narrative.push("退休資金與事件壓力會互相疊加，不能只靠提高報酬率期待過關。");
   }
 
-  return notes;
-}
+  narrative.push(
+    `${lowPoint.year} 年是目前最危險的水位低點，代表這一年最值得優先做壓力拆解。`,
+  );
 
-export function buildAdvisorInsight(
-  input: FinancialInput,
-  summary: FinancialSummary,
-  retirement: RetirementResult,
-): AdvisorInsight {
+  if (summary.emergencyFundMonths >= 18) {
+    strengths.push("流動資產足以支撐超過 18 個月日常支出，短期抗壓性不錯。");
+  }
+  if (summary.savingRatio >= 0.25) {
+    strengths.push("目前儲蓄率具備修補缺口的空間，你不是只能被動接受結果。");
+  }
+  if (answers.expectsHouseSale) {
+    strengths.push("你已把房產變現視為備援方案，退休調整彈性會比較高。");
+  }
+  if (answers.expectsSideIncomeAfterRetire) {
+    strengths.push("退休後若能保留部分收入，資產壓力會明顯下降。");
+  }
+
+  if (summary.emergencyFundMonths < 9) {
+    gaps.push({
+      title: "流動安全墊偏薄",
+      priority: "critical",
+      reason: `目前可動用資產約可支撐 ${summary.emergencyFundMonths.toFixed(1)} 個月支出，遇到醫療或家庭支援會很吃緊。`,
+      action: "先把現金與低波動資產補到至少 12 個月支出，再談進一步優化投資配置。",
+    });
+  }
+  if (summary.debtAssetRatio > 0.45) {
+    gaps.push({
+      title: "負債壓力偏高",
+      priority: "critical",
+      reason: "房貸與借款佔總資產比重偏高，退休前後若收入下降，現金流會先被負債綁住。",
+      action: "優先確認退休前能否降低貸款壓力，或另留房貸過渡現金。",
+    });
+  }
+  if (retirement.bridgeNeed > retirement.portfolioAtRetire * 0.35) {
+    gaps.push({
+      title: "退休到年金開始前的銜接壓力偏大",
+      priority: "critical",
+      reason: `這段期間大約需要先自行負擔 ${formatCurrency(retirement.bridgeNeed)}。`,
+      action: "延後退休、降低退休初期支出，或先建立專門的過渡資金池。",
+    });
+  }
+  if (retirement.gap < 0) {
+    gaps.push({
+      title: "退休資金仍有缺口",
+      priority: "important",
+      reason: `依目前假設，退休資金約短缺 ${formatCurrency(Math.abs(retirement.gap))}。`,
+      action: "先調整儲蓄率、退休年齡、退休後支出三者，再看投資情境。",
+    });
+  }
+  if (lowPoint.endAsset < 0) {
+    gaps.push({
+      title: "未來某一年現金流會跌破零",
+      priority: "critical",
+      reason: `${lowPoint.year} 年資產水位推估會掉到 ${formatCurrency(lowPoint.endAsset)}。`,
+      action: "把那一年的大額事件往前存、往後移，或改成分段支付。",
+    });
+  }
+  if (openHighPriority.length > 0) {
+    gaps.push({
+      title: "高優先推薦尚未納入正式計畫",
+      priority: "important",
+      reason: `目前仍有 ${openHighPriority.length} 項高優先事件只是知道，但還沒正式放進時間軸。`,
+      action: "至少先把高優先推薦接受進計畫，再調整年份與金額。",
+    });
+  }
+
+  if (answers.hasInsuranceGap) {
+    blindSpots.push("保障不足不是保費問題，而是突發事件時你會不會被迫賣掉長期資產。");
+  }
+  if (answers.expectsParentCare) {
+    blindSpots.push("父母照護通常來得比預期早，而且常常不是一次性支出。");
+  }
+  if (answers.hasChildren && answers.plansEducationSupport) {
+    blindSpots.push("教育高峰常和退休前幾年重疊，最怕在市場不佳時剛好需要提款。");
+  }
+  if (acceptedEvents.length === 0) {
+    blindSpots.push("現在的圖表幾乎只反映基礎現金流，還沒有反映人生事件的真實壓力。");
+  }
+
+  const weight = { critical: 0, important: 1, optimize: 2 };
+  gaps.sort((a, b) => weight[a.priority] - weight[b.priority]);
+  if (gaps.length === 0) {
+    gaps.push({
+      title: "目前沒有明顯紅燈，但還可以再優化",
+      priority: "optimize",
+      reason: "你的基本結構已經不差，下一步是把大額事件與退休策略做更細的情境管理。",
+      action: "把推薦事件補進時間軸，確認在保守情境下仍能成立。",
+    });
+  }
+
   return {
-    blindSpots: buildBlindSpots(input),
-    gaps: buildGapPriorities(input, summary, retirement),
-    narrative: buildAdvisorNarrative(input, summary, retirement),
+    headline:
+      gaps[0].priority === "critical"
+        ? "先守住現金流與退休銜接，再談優化。"
+        : "基礎架構已成形，接下來重點是把事件壓力提前攤開。",
+    narrative,
+    strengths,
+    blindSpots,
+    gaps,
   };
 }
